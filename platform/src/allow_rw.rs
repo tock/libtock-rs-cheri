@@ -49,7 +49,7 @@ impl<'share, S: Syscalls, const DRIVER_NUM: u32, const BUFFER_NUM: u32> Drop
     for AllowRw<'share, S, DRIVER_NUM, BUFFER_NUM>
 {
     fn drop(&mut self) {
-        S::unallow_rw(DRIVER_NUM, BUFFER_NUM);
+        let _ = S::unallow_rw(DRIVER_NUM, BUFFER_NUM);
     }
 }
 

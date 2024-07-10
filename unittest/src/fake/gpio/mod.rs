@@ -145,10 +145,10 @@ impl<const NUM_GPIOS: usize> crate::fake::SyscallDriver for Gpio<NUM_GPIOS> {
         self.share_ref.replace(share_ref);
     }
 
-    fn command(&self, command_number: u32, argument0: u32, argument1: u32) -> CommandReturn {
+    fn command(&self, command_number: u32, argument0: usize, argument1: usize) -> CommandReturn {
         if command_number == GPIO_COUNT {
             crate::command_return::success_u32(NUM_GPIOS as u32)
-        } else if argument0 < NUM_GPIOS as u32 {
+        } else if argument0 < NUM_GPIOS {
             if self.gpios[argument0 as usize].get().is_some() {
                 let gpio = self.gpios[argument0 as usize].get().unwrap();
                 match command_number {
@@ -187,7 +187,7 @@ impl<const NUM_GPIOS: usize> crate::fake::SyscallDriver for Gpio<NUM_GPIOS> {
                         crate::command_return::success()
                     }
                     GPIO_ENABLE_INPUT => {
-                        let pull_mode = PullMode::try_from(argument1);
+                        let pull_mode = PullMode::try_from(argument1 as u32);
                         match pull_mode {
                             Ok(mode) => {
                                 self.gpios[argument0 as usize].set(Some(GpioState {
@@ -207,7 +207,7 @@ impl<const NUM_GPIOS: usize> crate::fake::SyscallDriver for Gpio<NUM_GPIOS> {
                         }
                     }
                     GPIO_ENABLE_INTERRUPTS => {
-                        let edge = InterruptEdge::try_from(argument1);
+                        let edge = InterruptEdge::try_from(argument1 as u32);
                         match edge {
                             Ok(interrupt_edge) => {
                                 self.gpios[argument0 as usize].set(Some(GpioState {

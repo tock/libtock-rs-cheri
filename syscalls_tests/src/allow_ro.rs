@@ -14,7 +14,7 @@ impl fake::SyscallDriver for TestDriver {
         DriverInfo::new(42)
     }
 
-    fn command(&self, _command_num: u32, _argument0: u32, _argument1: u32) -> CommandReturn {
+    fn command(&self, _command_num: usize, _argument0: usize, _argument1: usize) -> CommandReturn {
         command_return::failure(ErrorCode::NoSupport)
     }
 

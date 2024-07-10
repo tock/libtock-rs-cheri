@@ -54,7 +54,8 @@ impl<S: Syscalls> Buttons<S> {
 
     /// Read the state of a button
     pub fn read(button: u32) -> Result<ButtonState, ErrorCode> {
-        let button_state: u32 = S::command(DRIVER_NUM, BUTTONS_READ, button, 0).to_result()?;
+        let button_state: u32 =
+            S::command(DRIVER_NUM, BUTTONS_READ, button as usize, 0).to_result()?;
         Ok(button_state.into())
     }
 
@@ -84,12 +85,12 @@ impl<S: Syscalls> Buttons<S> {
 
     /// Enable events (interrupts) for a button
     pub fn enable_interrupts(button: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, BUTTONS_ENABLE_INTERRUPTS, button, 0).to_result()
+        S::command(DRIVER_NUM, BUTTONS_ENABLE_INTERRUPTS, button as usize, 0).to_result()
     }
 
     /// Disable events (interrupts) for a button
     pub fn disable_interrupts(button: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, BUTTONS_DISABLE_INTERRUPTS, button, 0).to_result()
+        S::command(DRIVER_NUM, BUTTONS_DISABLE_INTERRUPTS, button as usize, 0).to_result()
     }
 
     /// Register an events listener
@@ -124,8 +125,8 @@ impl<S: Syscalls> Buttons<S> {
 pub struct ButtonListener<F: Fn(u32, ButtonState)>(pub F);
 
 impl<F: Fn(u32, ButtonState)> Upcall<OneId<DRIVER_NUM, 0>> for ButtonListener<F> {
-    fn upcall(&self, button_index: u32, state: u32, _arg2: u32) {
-        self.0(button_index, state.into())
+    fn upcall(&self, button_index: usize, state: usize, _arg2: usize) {
+        self.0(button_index as u32, (state as u32).into())
     }
 }
 #[cfg(test)]

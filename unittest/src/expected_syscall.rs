@@ -39,8 +39,8 @@ pub enum ExpectedSyscall {
         // command_id, argument0, and argument1 values.
         driver_id: u32,
         command_id: u32,
-        argument0: u32,
-        argument1: u32,
+        argument0: usize,
+        argument1: usize,
 
         // If not None, the output of the driver will be replaced with the given
         // return value.

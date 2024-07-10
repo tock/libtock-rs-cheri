@@ -5,6 +5,34 @@ use crate::{
     yield_id, AllowRo, AllowRw, CommandReturn, ErrorCode, RawSyscalls, Register, ReturnVariant,
     Subscribe, Syscalls, Upcall, YieldNoWaitReturn,
 };
+use kernel::cheri::cptr;
+
+#[inline]
+fn check_result(r0: Register, r1: Register) -> Result<(), ErrorCode> {
+    let return_variant: ReturnVariant = r0.as_u32().into();
+    // TRD 104 guarantees that Subscribe returns either Successor Failure.
+    // We check the return variant by comparing against Failure for 2 reasons:
+    //
+    //   1. On RISC-V with compressed instructions, it generates smaller
+    //      code. FAILURE_2_U32 has value 2, which can be loaded into a
+    //      register with a single compressed instruction, whereas
+    //      loading SUCCESS_2_U32 uses an uncompressed instruction.
+    //   2. In the event the kernel malfuctions and returns a different
+    //      return variant, the success path is actually safer than the
+    //      failure path. The failure path assumes that r1 contains an
+    //      ErrorCode, and produces UB if it has an out of range value.
+    //      Incorrectly assuming the call succeeded will not generate
+    //      unsoundness, and will likely lead to the application
+    //      hanging.
+    if return_variant == return_variant::FAILURE {
+        // Safety: TRD 104 guarantees that if r0 is Failure with 2 U32,
+        // then r1 will contain a valid error code. ErrorCode is
+        // designed to be safely transmuted directly from a kernel error
+        // code.
+        return Err(unsafe { core::mem::transmute(r1.as_u32()) });
+    }
+    Ok(())
+}
 
 impl<S: RawSyscalls> Syscalls for S {
     // -------------------------------------------------------------------------
@@ -54,9 +82,9 @@ impl<S: RawSyscalls> Syscalls for S {
         //
         // Safety: data must be a reference to a valid instance of U.
         unsafe extern "C" fn kernel_upcall<S: Syscalls, IDS, U: Upcall<IDS>>(
-            arg0: u32,
-            arg1: u32,
-            arg2: u32,
+            arg0: usize,
+            arg1: usize,
+            arg2: usize,
             data: Register,
         ) {
             let exit: exit_on_drop::ExitOnDrop<S> = Default::default();
@@ -97,29 +125,7 @@ impl<S: RawSyscalls> Syscalls for S {
                 ])
             };
 
-            let return_variant: ReturnVariant = r0.as_u32().into();
-            // TRD 104 guarantees that Subscribe returns either Success with 2
-            // U32 or Failure with 2 U32. We check the return variant by
-            // comparing against Failure with 2 U32 for 2 reasons:
-            //
-            //   1. On RISC-V with compressed instructions, it generates smaller
-            //      code. FAILURE_2_U32 has value 2, which can be loaded into a
-            //      register with a single compressed instruction, whereas
-            //      loading SUCCESS_2_U32 uses an uncompressed instruction.
-            //   2. In the event the kernel malfuctions and returns a different
-            //      return variant, the success path is actually safer than the
-            //      failure path. The failure path assumes that r1 contains an
-            //      ErrorCode, and produces UB if it has an out of range value.
-            //      Incorrectly assuming the call succeeded will not generate
-            //      unsoundness, and will likely lead to the application
-            //      hanging.
-            if return_variant == return_variant::FAILURE_2_U32 {
-                // Safety: TRD 104 guarantees that if r0 is Failure with 2 U32,
-                // then r1 will contain a valid error code. ErrorCode is
-                // designed to be safely transmuted directly from a kernel error
-                // code.
-                return Err(unsafe { core::mem::transmute(r1.as_u32()) });
-            }
+            check_result(r0, r1)?;
 
             // r0 indicates Success with 2 u32s. Confirm the null upcall was
             // returned, and it if wasn't then call the configured function.
@@ -134,7 +140,7 @@ impl<S: RawSyscalls> Syscalls for S {
             Ok(())
         }
 
-        let upcall_fcn = (kernel_upcall::<S, IDS, U> as *const ()).into();
+        let upcall_fcn = Register::from_function(kernel_upcall::<S, IDS, U> as *const ());
         let upcall_data = (upcall as *const U).into();
         // Safety: upcall's type guarantees it is a reference to a U that will
         // remain valid for at least the 'scope lifetime. _subscribe is a
@@ -162,7 +168,12 @@ impl<S: RawSyscalls> Syscalls for S {
     // Command
     // -------------------------------------------------------------------------
 
-    fn command(driver_id: u32, command_id: u32, argument0: u32, argument1: u32) -> CommandReturn {
+    fn command(
+        driver_id: u32,
+        command_id: u32,
+        argument0: usize,
+        argument1: usize,
+    ) -> CommandReturn {
         unsafe {
             // syscall4's documentation indicates it can be used to call
             // Command. The Command system call cannot trigger undefined
@@ -177,7 +188,7 @@ impl<S: RawSyscalls> Syscalls for S {
             // Because r0 and r1 are returned directly from the kernel, we are
             // guaranteed that if r0 represents a failure variant then r1 is an
             // error code.
-            CommandReturn::new(r0.as_u32().into(), r1.as_u32(), r2.as_u32(), r3.as_u32())
+            CommandReturn::new(r0.as_u32().into(), r1.into(), r2.into(), r3.into())
         }
     }
 
@@ -210,29 +221,7 @@ impl<S: RawSyscalls> Syscalls for S {
                 ])
             };
 
-            let return_variant: ReturnVariant = r0.as_u32().into();
-            // TRD 104 guarantees that Read-Write Allow returns either Success
-            // with 2 U32 or Failure with 2 U32. We check the return variant by
-            // comparing against Failure with 2 U32 for 2 reasons:
-            //
-            //   1. On RISC-V with compressed instructions, it generates smaller
-            //      code. FAILURE_2_U32 has value 2, which can be loaded into a
-            //      register with a single compressed instruction, whereas
-            //      loading SUCCESS_2_U32 uses an uncompressed instruction.
-            //   2. In the event the kernel malfuctions and returns a different
-            //      return variant, the success path is actually safer than the
-            //      failure path. The failure path assumes that r1 contains an
-            //      ErrorCode, and produces UB if it has an out of range value.
-            //      Incorrectly assuming the call succeeded will not generate
-            //      unsoundness, and will likely lead to the application
-            //      panicing.
-            if return_variant == return_variant::FAILURE_2_U32 {
-                // Safety: TRD 104 guarantees that if r0 is Failure with 2 U32,
-                // then r1 will contain a valid error code. ErrorCode is
-                // designed to be safely transmuted directly from a kernel error
-                // code.
-                return Err(unsafe { core::mem::transmute(r1.as_u32()) });
-            }
+            check_result(r0, r1)?;
 
             // r0 indicates Success with 2 u32s. Confirm a zero buffer was
             // returned, and it if wasn't then call the configured function.
@@ -251,17 +240,18 @@ impl<S: RawSyscalls> Syscalls for S {
         unsafe { inner::<Self, CONFIG>(DRIVER_NUM, BUFFER_NUM, buffer) }
     }
 
-    fn unallow_rw(driver_num: u32, buffer_num: u32) {
+    fn unallow_rw(driver_num: u32, buffer_num: u32) -> Result<(), ErrorCode> {
         unsafe {
             // syscall4's documentation indicates it can be used to call
             // Read-Write Allow. The buffer passed has 0 length, which cannot
             // cause undefined behavior on its own.
-            Self::syscall4::<{ syscall_class::ALLOW_RW }>([
+            let [r0, r1, _, _] = Self::syscall4::<{ syscall_class::ALLOW_RW }>([
                 driver_num.into(),
                 buffer_num.into(),
                 0usize.into(),
                 0usize.into(),
             ]);
+            check_result(r0, r1)
         }
     }
 
@@ -297,31 +287,9 @@ impl<S: RawSyscalls> Syscalls for S {
                 ])
             };
 
-            let return_variant: ReturnVariant = r0.as_u32().into();
-            // TRD 104 guarantees that Read-Only Allow returns either Success
-            // with 2 U32 or Failure with 2 U32. We check the return variant by
-            // comparing against Failure with 2 U32 for 2 reasons:
-            //
-            //   1. On RISC-V with compressed instructions, it generates smaller
-            //      code. FAILURE_2_U32 has value 2, which can be loaded into a
-            //      register with a single compressed instruction, whereas
-            //      loading SUCCESS_2_U32 uses an uncompressed instruction.
-            //   2. In the event the kernel malfuctions and returns a different
-            //      return variant, the success path is actually safer than the
-            //      failure path. The failure path assumes that r1 contains an
-            //      ErrorCode, and produces UB if it has an out of range value.
-            //      Incorrectly assuming the call succeeded will not generate
-            //      unsoundness, and will likely lead to the application
-            //      panicing.
-            if return_variant == return_variant::FAILURE_2_U32 {
-                // Safety: TRD 104 guarantees that if r0 is Failure with 2 U32,
-                // then r1 will contain a valid error code. ErrorCode is
-                // designed to be safely transmuted directly from a kernel error
-                // code.
-                return Err(unsafe { core::mem::transmute(r1.as_u32()) });
-            }
+            check_result(r0, r1)?;
 
-            // r0 indicates Success with 2 u32s. Confirm a zero buffer was
+            // r0 indicates Success. Confirm a zero buffer was
             // returned, and it if wasn't then call the configured function.
             // We're relying on the optimizer to remove this branch if
             // returned_nozero_buffer is a no-op.
@@ -338,17 +306,18 @@ impl<S: RawSyscalls> Syscalls for S {
         inner::<Self, CONFIG>(DRIVER_NUM, BUFFER_NUM, buffer)
     }
 
-    fn unallow_ro(driver_num: u32, buffer_num: u32) {
+    fn unallow_ro(driver_num: u32, buffer_num: u32) -> Result<(), ErrorCode> {
         unsafe {
             // syscall4's documentation indicates it can be used to call
             // Read-Only Allow. The buffer passed has 0 length, which cannot
             // cause undefined behavior on its own.
-            Self::syscall4::<{ syscall_class::ALLOW_RO }>([
+            let [r0, r1, _, _] = Self::syscall4::<{ syscall_class::ALLOW_RO }>([
                 driver_num.into(),
                 buffer_num.into(),
                 0usize.into(),
                 0usize.into(),
             ]);
+            check_result(r0, r1)
         }
     }
 
@@ -381,5 +350,34 @@ impl<S: RawSyscalls> Syscalls for S {
             // never return.
             core::hint::unreachable_unchecked()
         }
+    }
+
+    fn memop(op_type: u32, arg1: usize) -> Result<cptr, ErrorCode> {
+        unsafe {
+            let [r0, r1] =
+                Self::syscall2::<{ syscall_class::MEMOP }>([op_type.into(), arg1.into()]);
+            let return_variant: ReturnVariant = r0.as_u32().into();
+            if return_variant == return_variant::FAILURE {
+                Err(core::mem::transmute(r1.as_u32()))
+            } else {
+                Ok(r1.0)
+            }
+        }
+    }
+
+    fn sbrk(offset: usize) -> Result<usize, ErrorCode> {
+        Self::memop(1, offset).map(|ptr: cptr| {
+            // On CHERI, sbrk should change DDC
+            #[cfg(target_feature = "xcheri")]
+            unsafe {
+                core::arch::asm!(
+                    "lc    ca0, 0(a0)",
+                    "cspecialw ddc, ca0",
+                    inlateout("a0") (& ptr as  *const cptr) => _,
+                    options(preserves_flags, nostack),
+                );
+            }
+            ptr.into()
+        })
     }
 }

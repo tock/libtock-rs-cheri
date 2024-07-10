@@ -7,9 +7,22 @@ rthumbv7em = "run --release --target=thumbv7em-none-eabi --example"
 rtv7em = "rthumbv7em"
 
 # Common settings for all embedded targets
-[target.'cfg(any(target_arch = "arm", target_arch = "riscv32"))']
+[target.'cfg(any(target_arch = "arm", target_arch = "riscv32", target_arch = "riscv64"))']
 rustflags = [
-    "-C", "relocation-model=static",
-    "-C", "link-arg=-Tlayout.ld",
+    # Would be nice to expand this, but cargo config cannot handle environment
+    # variables afaict. Insteaad this is passed via makefile.
+    #"-C", "linker=...",
+    #   -pie is require to convert absolute relocations to dynamic ones.
+    #     This is not implied by relocation-model=pie
+    #   -zrel puts addends in the value contained at the relocation offset.
+    #   this leads to smaller binaries.
+    "-C", "link-args=-Tlibtock_layout_pie.ld --no-rosegment -nmagic -icf=all --no-dynamic-linker -pie -zrel",
+    "-C", "linker-flavor=ld.lld",
+    "-C", "relocation-model=pie",
 ]
-runner = ["cargo", "run", "-p", "runner", "--release"]
+# Need to override the rust toolchain AND linker to the host one.
+# The toolchain needs to override what is provided by rust-toolchain
+# The linker needs changing because passing the linker as a parameter pollutes
+# the envionment from which this instance of cargo is run.
+#  "--config", "target.'cfg(any())'.linker", "=", "rust-lld"
+runner = ["cargo", "+nightly", "run", "-p", "runner", "--release"]

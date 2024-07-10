@@ -39,7 +39,7 @@ impl<S: Syscalls, C: Config> Console<S, C> {
     /// This is an alternative to `fmt::Write::write`
     /// because this can actually return an error code.
     pub fn write(s: &[u8]) -> Result<(), ErrorCode> {
-        let called: Cell<Option<(u32,)>> = Cell::new(None);
+        let called: Cell<Option<(usize,)>> = Cell::new(None);
         share::scope::<
             (
                 AllowRo<_, DRIVER_NUM, { allow_ro::WRITE }>,
@@ -54,7 +54,7 @@ impl<S: Syscalls, C: Config> Console<S, C> {
 
             S::subscribe::<_, _, C, DRIVER_NUM, { subscribe::WRITE }>(subscribe, &called)?;
 
-            S::command(DRIVER_NUM, command::WRITE, s.len() as u32, 0).to_result()?;
+            S::command(DRIVER_NUM, command::WRITE, s.len(), 0).to_result()?;
 
             loop {
                 S::yield_wait();
@@ -70,7 +70,7 @@ impl<S: Syscalls, C: Config> Console<S, C> {
     /// No special guarantees about when the read stops.
     /// Returns count of bytes written to `buf`.
     pub fn read(buf: &mut [u8]) -> (usize, Result<(), ErrorCode>) {
-        let called: Cell<Option<(u32, u32)>> = Cell::new(None);
+        let called: Cell<Option<(usize, usize)>> = Cell::new(None);
         let mut bytes_received = 0;
         let r = share::scope::<
             (
@@ -87,15 +87,15 @@ impl<S: Syscalls, C: Config> Console<S, C> {
 
             // When this fails, `called` is guaranteed unmodified,
             // because upcalls are never processed until we call `yield`.
-            S::command(DRIVER_NUM, command::READ, len as u32, 0).to_result()?;
+            S::command(DRIVER_NUM, command::READ, len, 0).to_result()?;
 
             loop {
                 S::yield_wait();
                 if let Some((status, bytes_pushed_count)) = called.get() {
-                    bytes_received = bytes_pushed_count as usize;
+                    bytes_received = bytes_pushed_count;
                     return match status {
                         0 => Ok(()),
-                        e_status => Err(e_status.try_into().unwrap_or(ErrorCode::Fail)),
+                        e_status => Err((e_status as u32).try_into().unwrap_or(ErrorCode::Fail)),
                     };
                 }
             }

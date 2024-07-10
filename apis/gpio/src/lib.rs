@@ -192,11 +192,11 @@ impl<S: Syscalls, P: Pull> Drop for InputPin<'_, S, P> {
 
 impl<S: Syscalls> Gpio<S> {
     fn enable_gpio_output(pin: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, GPIO_ENABLE_OUTPUT, pin, 0).to_result()
+        S::command(DRIVER_NUM, GPIO_ENABLE_OUTPUT, pin as usize, 0).to_result()
     }
 
     fn enable_gpio_input(pin: u32, mode: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, GPIO_ENABLE_INPUT, pin, mode).to_result()
+        S::command(DRIVER_NUM, GPIO_ENABLE_INPUT, pin as usize, mode as usize).to_result()
     }
 
     fn write(pin: u32, state: GpioState) -> Result<(), ErrorCode> {
@@ -204,28 +204,35 @@ impl<S: Syscalls> Gpio<S> {
             GpioState::Low => GPIO_CLEAR,
             _ => GPIO_SET,
         };
-        S::command(DRIVER_NUM, action, pin, 0).to_result()
+        S::command(DRIVER_NUM, action, pin as usize, 0).to_result()
     }
 
     fn read(pin: u32) -> Result<GpioState, ErrorCode> {
-        let pin_state: u32 = S::command(DRIVER_NUM, GPIO_READ_INPUT, pin, 0).to_result()?;
+        let pin_state: u32 =
+            S::command(DRIVER_NUM, GPIO_READ_INPUT, pin as usize, 0).to_result()?;
         Ok(pin_state.into())
     }
 
     fn toggle(pin: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, GPIO_TOGGLE, pin, 0).to_result()
+        S::command(DRIVER_NUM, GPIO_TOGGLE, pin as usize, 0).to_result()
     }
 
     fn disable(pin: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, GPIO_DISABLE, pin, 0).to_result()
+        S::command(DRIVER_NUM, GPIO_DISABLE, pin as usize, 0).to_result()
     }
 
     fn enable_interrupts(pin: u32, edge: PinInterruptEdge) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, GPIO_ENABLE_INTERRUPTS, pin, edge as u32).to_result()
+        S::command(
+            DRIVER_NUM,
+            GPIO_ENABLE_INTERRUPTS,
+            pin as usize,
+            edge as usize,
+        )
+        .to_result()
     }
 
     fn disable_interrupts(pin: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, GPIO_DISABLE_INTERRUPTS, pin, 0).to_result()
+        S::command(DRIVER_NUM, GPIO_DISABLE_INTERRUPTS, pin as usize, 0).to_result()
     }
 }
 

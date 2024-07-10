@@ -25,15 +25,15 @@ impl<S: Syscalls> Leds<S> {
     }
 
     pub fn on(led: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, LED_ON, led, 0).to_result()
+        S::command(DRIVER_NUM, LED_ON, led as usize, 0).to_result()
     }
 
     pub fn off(led: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, LED_OFF, led, 0).to_result()
+        S::command(DRIVER_NUM, LED_OFF, led as usize, 0).to_result()
     }
 
     pub fn toggle(led: u32) -> Result<(), ErrorCode> {
-        S::command(DRIVER_NUM, LED_TOGGLE, led, 0).to_result()
+        S::command(DRIVER_NUM, LED_TOGGLE, led as usize, 0).to_result()
     }
 }
 

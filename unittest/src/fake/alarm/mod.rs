@@ -34,7 +34,7 @@ impl crate::fake::SyscallDriver for Alarm {
         self.share_ref.replace(share_ref);
     }
 
-    fn command(&self, command_number: u32, argument0: u32, _argument1: u32) -> CommandReturn {
+    fn command(&self, command_number: u32, argument0: usize, _argument1: usize) -> CommandReturn {
         match command_number {
             command::FREQUENCY => crate::command_return::success_u32(self.frequency_hz),
             command::SET_RELATIVE => {
@@ -42,7 +42,7 @@ impl crate::fake::SyscallDriver for Alarm {
                 // The semantics of sleeping aren't clear,
                 // so we're assuming that all future times are equal,
                 // and waking immediately.
-                let relative = argument0;
+                let relative = argument0 as u32;
                 let wake = self.now.get() + Wrapping(relative);
                 self.share_ref
                     .schedule_upcall(subscribe::CALLBACK, (wake.0, 0, 0))

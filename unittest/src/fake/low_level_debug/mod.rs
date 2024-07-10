@@ -31,12 +31,12 @@ impl crate::fake::SyscallDriver for LowLevelDebug {
         DriverInfo::new(DRIVER_NUM)
     }
 
-    fn command(&self, command_num: u32, argument0: u32, argument1: u32) -> CommandReturn {
+    fn command(&self, command_num: u32, argument0: usize, argument1: usize) -> CommandReturn {
         match command_num {
             DRIVER_CHECK => {}
-            PRINT_ALERT_CODE => self.handle_message(Message::AlertCode(argument0)),
-            PRINT_1 => self.handle_message(Message::Print1(argument0)),
-            PRINT_2 => self.handle_message(Message::Print2(argument0, argument1)),
+            PRINT_ALERT_CODE => self.handle_message(Message::AlertCode(argument0 as u32)),
+            PRINT_1 => self.handle_message(Message::Print1(argument0 as u32)),
+            PRINT_2 => self.handle_message(Message::Print2(argument0 as u32, argument1 as u32)),
             _ => return crate::command_return::failure(ErrorCode::NoSupport),
         }
         crate::command_return::success()

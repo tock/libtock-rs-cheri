@@ -20,13 +20,17 @@
 
 #![no_std]
 #![warn(unsafe_op_in_unsafe_fn)]
+#![feature(alloc_error_handler)]
 
 pub mod startup;
+pub mod std;
+mod tock_alloc;
 
 /// TockSyscalls implements `libtock_platform::Syscalls`.
 pub struct TockSyscalls;
 
+#[cfg(any(target_arch = "riscv64", target_arch = "riscv32"))]
+mod syscalls_impl_riscv;
+
 #[cfg(target_arch = "arm")]
 mod syscalls_impl_arm;
-#[cfg(target_arch = "riscv32")]
-mod syscalls_impl_riscv;

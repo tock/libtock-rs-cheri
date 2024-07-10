@@ -19,7 +19,7 @@ impl fake::SyscallDriver for MockDriver {
         self.share_ref.replace(share_ref);
     }
 
-    fn command(&self, _: u32, _: u32, _: u32) -> CommandReturn {
+    fn command(&self, _: u32, _: usize, _: usize) -> CommandReturn {
         command_return::failure(ErrorCode::NoSupport)
     }
 }
@@ -110,7 +110,7 @@ fn unwinding_upcall() {
     struct BadUpcall;
 
     impl libtock_platform::Upcall<subscribe::AnyId> for BadUpcall {
-        fn upcall(&self, _: u32, _: u32, _: u32) {
+        fn upcall(&self, _: usize, _: usize, _: usize) {
             panic!("Beginning stack unwinding");
         }
     }

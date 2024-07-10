@@ -2,6 +2,7 @@ use crate::{
     allow_ro, allow_rw, share, subscribe, AllowRo, AllowRw, CommandReturn, ErrorCode, RawSyscalls,
     Subscribe, Upcall, YieldNoWaitReturn,
 };
+use kernel::cheri::cptr;
 
 /// `Syscalls` provides safe abstractions over Tock's system calls. It is
 /// implemented for `libtock_runtime::TockSyscalls` and
@@ -45,7 +46,12 @@ pub trait Syscalls: RawSyscalls + Sized {
     // Command
     // -------------------------------------------------------------------------
 
-    fn command(driver_id: u32, command_id: u32, argument0: u32, argument1: u32) -> CommandReturn;
+    fn command(
+        driver_id: u32,
+        command_id: u32,
+        argument0: usize,
+        argument1: usize,
+    ) -> CommandReturn;
 
     // -------------------------------------------------------------------------
     // Read-Write Allow
@@ -60,7 +66,7 @@ pub trait Syscalls: RawSyscalls + Sized {
     /// Revokes the kernel's access to the buffer with the given ID, overwriting
     /// it with a zero buffer. If no buffer is shared with the given ID,
     /// `unallow_rw` does nothing.
-    fn unallow_rw(driver_num: u32, buffer_num: u32);
+    fn unallow_rw(driver_num: u32, buffer_num: u32) -> Result<(), ErrorCode>;
 
     // -------------------------------------------------------------------------
     // Read-Only Allow
@@ -72,12 +78,37 @@ pub trait Syscalls: RawSyscalls + Sized {
         buffer: &'share [u8],
     ) -> Result<(), ErrorCode>;
 
+    fn allow_ro_32<
+        'share,
+        CONFIG: allow_ro::Config,
+        const DRIVER_NUM: u32,
+        const BUFFER_NUM: u32,
+    >(
+        allow_ro: share::Handle<AllowRo<'share, Self, DRIVER_NUM, BUFFER_NUM>>,
+        buffer: &'share [u32],
+    ) -> Result<(), ErrorCode> {
+        // Safety: every buffer of u32s is also a buffer of u8s
+        Self::allow_ro::<CONFIG, DRIVER_NUM, BUFFER_NUM>(allow_ro, unsafe {
+            let len = core::mem::size_of::<u32>() * buffer.len();
+            let ptr = buffer.as_ptr() as *const u8;
+            core::slice::from_raw_parts(ptr, len)
+        })
+    }
+
     /// Revokes the kernel's access to the buffer with the given ID, overwriting
     /// it with a zero buffer. If no buffer is shared with the given ID,
     /// `unallow_ro` does nothing.
-    fn unallow_ro(driver_num: u32, buffer_num: u32);
+    fn unallow_ro(driver_num: u32, buffer_num: u32) -> Result<(), ErrorCode>;
 
-    // TODO: Add memop() methods.
+    /// Perform a memory operation
+    fn memop(op_type: u32, arg1: usize) -> Result<cptr, ErrorCode>;
+
+    /// Move the user/kernel break by offset bytes.
+    /// Returns the ABSOLUTE address of the previous user/kernel break.
+    /// On CHERI: DDC will be automatically set to authorise at least up to the new break.
+    fn sbrk(offset: usize) -> Result<usize, ErrorCode>;
+
+    /// TODO: wrap the other memops
 
     // -------------------------------------------------------------------------
     // Exit

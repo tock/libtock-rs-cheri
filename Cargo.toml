@@ -21,7 +21,7 @@ libtock_runtime = { path = "runtime" }
 
 [profile.dev]
 panic = "abort"
-lto = true
+lto = "thin"    # Other LTO generates bugged DWARF on RISCV which makes debug very hard
 debug = true
 
 [profile.release]

@@ -22,8 +22,8 @@ pub enum SyscallLogEntry {
     Command {
         driver_id: u32,
         command_id: u32,
-        argument0: u32,
-        argument1: u32,
+        argument0: usize,
+        argument1: usize,
     },
 
     // -------------------------------------------------------------------------

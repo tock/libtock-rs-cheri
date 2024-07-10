@@ -8,7 +8,7 @@ fn auto_layout() {
     use std::path::PathBuf;
 
     const PLATFORM_CFG_VAR: &str = "LIBTOCK_PLATFORM";
-    const LAYOUT_GENERIC_FILENAME: &str = "libtock_layout.ld";
+    const LAYOUT_GENERIC_FILENAME: &str = "libtock_layout_pie.ld";
 
     // Note: we need to print these rerun-if commands before using the variable
     // or file, so that if the build script fails cargo knows when to re-run it.
@@ -26,23 +26,18 @@ fn auto_layout() {
         "Build path contains a newline, which is unsupported"
     );
 
-    // Read the platform environment variable as a String (our platform names
-    // should all be valid UTF-8).
-    let platform = std::env::var(PLATFORM_CFG_VAR).expect("Please specify LIBTOCK_PLATFORM");
-
-    // Copy the platform-specific layout file into OUT_DIR.
-    let platform_filename = format!("{}.ld", platform);
-    let platform_path: PathBuf = ["layouts", &platform_filename].iter().collect();
-    println!("cargo:rerun-if-changed={}", platform_path.display());
-    assert!(platform_path.exists(), "Unknown platform {}", platform);
-    let out_platform_path: PathBuf = [out_dir, "layout.ld"].iter().collect();
-    copy(&platform_path, out_platform_path).expect("Unable to copy platform layout into OUT_DIR");
-
     // Copy the generic layout file into OUT_DIR.
     let out_layout_generic: PathBuf = [out_dir, LAYOUT_GENERIC_FILENAME].iter().collect();
     println!("cargo:rerun-if-changed={}", LAYOUT_GENERIC_FILENAME);
     copy(LAYOUT_GENERIC_FILENAME, out_layout_generic)
         .expect("Unable to copy layout_generic.ld into OUT_DIR");
+
+    // Link in libc. Only needed for malloc.
+    println!(
+        "cargo:rustc-link-search=native={}/lib",
+        std::env::var("CHERI_LIBC").expect("CHERI_LIBC not set"),
+    );
+    println!("cargo:rustc-link-lib=static=c");
 
     // Tell rustc where to search for the layout file.
     println!("cargo:rustc-link-search={}", out_dir);

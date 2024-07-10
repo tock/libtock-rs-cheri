@@ -1,3 +1,4 @@
+use crate::ErrorCode;
 use crate::share::List;
 use crate::Syscalls;
 
@@ -64,7 +65,7 @@ impl<'share, S: Syscalls, const DRIVER_NUM: u32, const SUBSCRIBE_NUM: u32> List
 /// are provided to use as `SupportedIds` parameters in `Upcall`
 /// implementations.
 pub trait Upcall<SupportedIds> {
-    fn upcall(&self, arg0: u32, arg1: u32, arg2: u32);
+    fn upcall(&self, arg0: usize, arg1: usize, arg2: usize);
 }
 
 pub trait SupportsId<const DRIVER_NUM: u32, const SUBSCRIBE_NUM: u32> {}
@@ -88,7 +89,7 @@ impl<const DRIVER_NUM: u32, const SUBSCRIBE_NUM: u32> SupportsId<DRIVER_NUM, SUB
 /// An implementation of `Upcall` that sets the contained boolean value to
 /// `true` when the upcall is invoked.
 impl Upcall<AnyId> for core::cell::Cell<bool> {
-    fn upcall(&self, _: u32, _: u32, _: u32) {
+    fn upcall(&self, _: usize, _: usize, _: usize) {
         self.set(true);
     }
 }
@@ -97,31 +98,109 @@ impl Upcall<AnyId> for core::cell::Cell<bool> {
 /// impls. Most users would prefer the `Cell<bool>` implementation over this
 /// impl, but this may be useful in a generic or macro context.
 impl Upcall<AnyId> for core::cell::Cell<Option<()>> {
-    fn upcall(&self, _: u32, _: u32, _: u32) {
+    fn upcall(&self, _: usize, _: usize, _: usize) {
         self.set(Some(()));
     }
 }
 
 /// An `Upcall` implementation that stores its first argument when called.
-impl Upcall<AnyId> for core::cell::Cell<Option<(u32,)>> {
-    fn upcall(&self, arg0: u32, _: u32, _: u32) {
+impl Upcall<AnyId> for core::cell::Cell<Option<(usize,)>> {
+    fn upcall(&self, arg0: usize, _: usize, _: usize) {
         self.set(Some((arg0,)));
     }
 }
 
 /// An `Upcall` implementation that stores its first two arguments when called.
-impl Upcall<AnyId> for core::cell::Cell<Option<(u32, u32)>> {
-    fn upcall(&self, arg0: u32, arg1: u32, _: u32) {
+impl Upcall<AnyId> for core::cell::Cell<Option<(usize, usize)>> {
+    fn upcall(&self, arg0: usize, arg1: usize, _: usize) {
         self.set(Some((arg0, arg1)));
     }
 }
 
 /// An `Upcall` implementation that stores its arguments when called.
-impl Upcall<AnyId> for core::cell::Cell<Option<(u32, u32, u32)>> {
-    fn upcall(&self, arg0: u32, arg1: u32, arg2: u32) {
+impl Upcall<AnyId> for core::cell::Cell<Option<(usize, usize, usize)>> {
+    fn upcall(&self, arg0: usize, arg1: usize, arg2: usize) {
         self.set(Some((arg0, arg1, arg2)));
     }
 }
+
+/// An `Upcall` implementation that stores its first argument as u32 when called.
+impl Upcall<AnyId> for core::cell::Cell<Option<(u32,)>> {
+    fn upcall(&self, arg0: usize, _: usize, _: usize) {
+        self.set(Some((arg0 as u32,)));
+    }
+}
+
+/// An `Upcall` implementation that stores its first two arguments as u32 when called.
+impl Upcall<AnyId> for core::cell::Cell<Option<(u32, u32)>> {
+    fn upcall(&self, arg0: usize, arg1: usize, _: usize) {
+        self.set(Some((arg0 as u32, arg1 as u32)));
+    }
+}
+
+/// An `Upcall` implementation that stores its arguments as u32 when called.
+impl Upcall<AnyId> for core::cell::Cell<Option<(u32, u32, u32)>> {
+    fn upcall(&self, arg0: usize, arg1: usize, arg2: usize) {
+        self.set(Some((arg0 as u32, arg1 as u32, arg2 as u32)));
+    }
+}
+
+/// Expose the types uses here with more useful names
+pub type StandardResult = core::cell::Cell<Option<(usize,)>>;
+pub type StandardResultArg1 = core::cell::Cell<Option<(usize, usize)>>;
+pub type StandardResultArg2 = core::cell::Cell<Option<(usize, usize, usize)>>;
+
+pub trait UpcallResult {
+    type Arg;
+    /// Get the upcall result as a Result<> type.
+    /// None if the upcall has not been called yet.
+    fn upcall_result(&self) -> Option<Result<Self::Arg, ErrorCode>>;
+
+    /// Get the upcall result as a Result<> type, yielding if the upcall has not been called.
+    #[inline]
+    fn upcall_result_yield<S: Syscalls>(&self) -> Result<Self::Arg, ErrorCode> {
+        loop {
+            if let Some(result) = self.upcall_result() {
+                return result;
+            }
+            S::yield_wait();
+        }
+    }
+
+    #[inline]
+    fn reset(&self) {}
+}
+
+macro_rules! implement_result {
+    ($t : ty, $out : ty, {$($args : tt)*}, $($outputs : tt)*) => {
+        impl UpcallResult for $t {
+            type Arg = $out;
+
+            #[inline]
+            fn upcall_result(&self) -> Option<Result<Self::Arg, ErrorCode>> {
+                match self.get() {
+                    None => {None}
+                    Some((x,$($args)*)) => {
+                        Some (match x {
+                            0 => Ok($($outputs)*),
+                            err => Err((err as u32).try_into().unwrap_or(ErrorCode::Fail)),
+                        })
+                    }
+                }
+            }
+
+            #[inline]
+            fn reset(&self) {
+                self.set(None);
+            }
+        }
+
+    };
+}
+
+implement_result!(StandardResult, (), {}, ());
+implement_result!(StandardResultArg1, usize, { y }, y);
+implement_result!(StandardResultArg2, (usize, usize), {y, z}, (y, z));
 
 #[cfg(test)]
 #[test]

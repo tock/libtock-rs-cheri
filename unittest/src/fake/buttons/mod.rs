@@ -70,11 +70,11 @@ impl<const NUM_BUTTONS: usize> crate::fake::SyscallDriver for Buttons<NUM_BUTTON
         self.share_ref.replace(share_ref);
     }
 
-    fn command(&self, command_number: u32, argument0: u32, _argument1: u32) -> CommandReturn {
+    fn command(&self, command_number: u32, argument0: usize, _argument1: usize) -> CommandReturn {
         match command_number {
             BUTTONS_COUNT => crate::command_return::success_u32(NUM_BUTTONS as u32),
             BUTTONS_ENABLE_INTERRUPTS => {
-                if argument0 < NUM_BUTTONS as u32 {
+                if argument0 < NUM_BUTTONS {
                     let button = self.buttons[argument0 as usize].get();
                     self.buttons[argument0 as usize].set(ButtonState {
                         interrupt_enabled: true,
@@ -86,7 +86,7 @@ impl<const NUM_BUTTONS: usize> crate::fake::SyscallDriver for Buttons<NUM_BUTTON
                 }
             }
             BUTTONS_DISABLE_INTERRUPTS => {
-                if argument0 < NUM_BUTTONS as u32 {
+                if argument0 < NUM_BUTTONS {
                     let button = self.buttons[argument0 as usize].get();
                     self.buttons[argument0 as usize].set(ButtonState {
                         interrupt_enabled: false,
@@ -98,7 +98,7 @@ impl<const NUM_BUTTONS: usize> crate::fake::SyscallDriver for Buttons<NUM_BUTTON
                 }
             }
             BUTTONS_READ => {
-                if argument0 < NUM_BUTTONS as u32 {
+                if argument0 < NUM_BUTTONS {
                     crate::command_return::success_u32(
                         self.buttons[argument0 as usize].get().pressed as u32,
                     )

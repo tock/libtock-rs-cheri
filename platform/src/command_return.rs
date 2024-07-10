@@ -65,15 +65,35 @@ pub struct CommandReturn {
 
     // Safety invariant on r1: If return_variant is failure variant, r1 must be
     // a valid ErrorCode.
-    r1: u32,
-    r2: u32,
-    r3: u32,
+    r1: usize,
+    r2: usize,
+    r3: usize,
+}
+
+/// On 32-bit platforms, lsb are the 32 lsbs and msb are the 32 msbs.
+/// on 64-bit platforms, lsb is all of the 64-bit field, and msb is ignored.
+pub fn get_u64_from_usizes(lsb: usize, msb: usize) -> u64 {
+    if core::mem::size_of::<usize>() == 4 {
+        lsb as u64 + ((msb as u64) << 32)
+    } else {
+        lsb as u64
+    }
+}
+
+/// On 32-bit platforms, return (lsb, msb) of val
+/// On 64-bit platforms, return (val, 0)
+pub fn get_usizes_from_u64(val: u64) -> (usize, usize) {
+    if core::mem::size_of::<usize>() == 4 {
+        (val as usize, (val >> 32) as usize)
+    } else {
+        (val as usize, 0)
+    }
 }
 
 impl CommandReturn {
     /// # Safety
     /// If return_variant is a failure variant, r1 must be a valid ErrorCode.
-    pub unsafe fn new(return_variant: ReturnVariant, r1: u32, r2: u32, r3: u32) -> Self {
+    pub unsafe fn new(return_variant: ReturnVariant, r1: usize, r2: usize, r3: usize) -> Self {
         CommandReturn {
             return_variant,
             r1,
@@ -139,7 +159,7 @@ impl CommandReturn {
         if !self.is_failure() {
             return None;
         }
-        Some(unsafe { transmute(self.r1) })
+        Some(unsafe { transmute(self.r1 as u32) })
     }
 
     /// Returns the error code and value if this CommandReturn is of type
@@ -148,7 +168,7 @@ impl CommandReturn {
         if !self.is_failure_u32() {
             return None;
         }
-        Some((unsafe { transmute(self.r1) }, self.r2))
+        Some((unsafe { transmute(self.r1 as u32) }, self.r2 as u32))
     }
 
     /// Returns the error code and return values if this CommandReturn is of
@@ -157,7 +177,11 @@ impl CommandReturn {
         if !self.is_failure_2_u32() {
             return None;
         }
-        Some((unsafe { transmute(self.r1) }, self.r2, self.r3))
+        Some((
+            unsafe { transmute(self.r1 as u32) },
+            self.r2 as u32,
+            self.r3 as u32,
+        ))
     }
 
     /// Returns the error code and return value if this CommandReturn is of type
@@ -167,8 +191,8 @@ impl CommandReturn {
             return None;
         }
         Some((
-            unsafe { transmute(self.r1) },
-            self.r2 as u64 + ((self.r3 as u64) << 32),
+            unsafe { transmute(self.r1 as u32) },
+            get_u64_from_usizes(self.r2, self.r3),
         ))
     }
 
@@ -177,7 +201,7 @@ impl CommandReturn {
         if !self.is_success_u32() {
             return None;
         }
-        Some(self.r1)
+        Some(self.r1 as u32)
     }
 
     /// Returns the values if this CommandReturn is of type Success with 2 u32.
@@ -185,7 +209,7 @@ impl CommandReturn {
         if !self.is_success_2_u32() {
             return None;
         }
-        Some((self.r1, self.r2))
+        Some((self.r1 as u32, self.r2 as u32))
     }
 
     /// Returns the value if this CommandReturn is of type Success with u64.
@@ -193,7 +217,7 @@ impl CommandReturn {
         if !self.is_success_u64() {
             return None;
         }
-        Some(self.r1 as u64 + ((self.r2 as u64) << 32))
+        Some(get_u64_from_usizes(self.r1, self.r3))
     }
 
     /// Returns the values if this CommandReturn is of type Success with 3 u32.
@@ -201,7 +225,7 @@ impl CommandReturn {
         if !self.is_success_3_u32() {
             return None;
         }
-        Some((self.r1, self.r2, self.r3))
+        Some((self.r1 as u32, self.r2 as u32, self.r3 as u32))
     }
 
     /// Returns the values if this CommandReturn is of type Success with u32 and
@@ -210,11 +234,11 @@ impl CommandReturn {
         if !self.is_success_u32_u64() {
             return None;
         }
-        Some((self.r1, self.r2 as u64 + ((self.r3 as u64) << 32)))
+        Some((self.r1 as u32, get_u64_from_usizes(self.r2, self.r3)))
     }
 
     /// Returns the register values used to create this command.
-    pub fn raw_values(&self) -> (ReturnVariant, u32, u32, u32) {
+    pub fn raw_values(&self) -> (ReturnVariant, usize, usize, usize) {
         (self.return_variant, self.r1, self.r2, self.r3)
     }
 
@@ -244,7 +268,7 @@ impl CommandReturn {
         let ec: ErrorCode = if return_variant == E::RETURN_VARIANT {
             // Safety: E::RETURN_VARIANT must be a failure variant, and
             // failure variants must contain a valid ErrorCode in r1.
-            unsafe { transmute(r1) }
+            unsafe { transmute(r1 as u32) }
         } else {
             r2 = 0;
             r3 = 0;
@@ -270,53 +294,53 @@ pub trait SuccessData: sealed::Sealed {
     const RETURN_VARIANT: ReturnVariant;
 
     /// Constructs the success data given the raw register values.
-    fn from_raw_values(r1: u32, r2: u32, r3: u32) -> Self;
+    fn from_raw_values(r1: usize, r2: usize, r3: usize) -> Self;
 }
 
 impl sealed::Sealed for () {}
 impl SuccessData for () {
     const RETURN_VARIANT: ReturnVariant = return_variant::SUCCESS;
 
-    fn from_raw_values(_r1: u32, _r2: u32, _r3: u32) -> Self {}
+    fn from_raw_values(_r1: usize, _r2: usize, _r3: usize) -> Self {}
 }
 impl sealed::Sealed for u32 {}
 impl SuccessData for u32 {
     const RETURN_VARIANT: ReturnVariant = return_variant::SUCCESS_U32;
 
-    fn from_raw_values(r1: u32, _r2: u32, _r3: u32) -> Self {
-        r1
+    fn from_raw_values(r1: usize, _r2: usize, _r3: usize) -> Self {
+        r1 as u32
     }
 }
 impl sealed::Sealed for u64 {}
 impl SuccessData for u64 {
     const RETURN_VARIANT: ReturnVariant = return_variant::SUCCESS_U64;
 
-    fn from_raw_values(r1: u32, r2: u32, _r3: u32) -> Self {
-        r1 as u64 | ((r2 as u64) << 32)
+    fn from_raw_values(r1: usize, r2: usize, _r3: usize) -> Self {
+        get_u64_from_usizes(r1, r2)
     }
 }
 impl sealed::Sealed for (u32, u32) {}
 impl SuccessData for (u32, u32) {
     const RETURN_VARIANT: ReturnVariant = return_variant::SUCCESS_2_U32;
 
-    fn from_raw_values(r1: u32, r2: u32, _r3: u32) -> Self {
-        (r1, r2)
+    fn from_raw_values(r1: usize, r2: usize, _r3: usize) -> Self {
+        (r1 as u32, r2 as u32)
     }
 }
 impl sealed::Sealed for (u32, u64) {}
 impl SuccessData for (u32, u64) {
     const RETURN_VARIANT: ReturnVariant = return_variant::SUCCESS_U32_U64;
 
-    fn from_raw_values(r1: u32, r2: u32, r3: u32) -> Self {
-        (r1, r2 as u64 | ((r3 as u64) << 32))
+    fn from_raw_values(r1: usize, r2: usize, r3: usize) -> Self {
+        (r1 as u32, get_u64_from_usizes(r2, r3))
     }
 }
 impl sealed::Sealed for (u32, u32, u32) {}
 impl SuccessData for (u32, u32, u32) {
     const RETURN_VARIANT: ReturnVariant = return_variant::SUCCESS_3_U32;
 
-    fn from_raw_values(r1: u32, r2: u32, r3: u32) -> Self {
-        (r1, r2, r3)
+    fn from_raw_values(r1: usize, r2: usize, r3: usize) -> Self {
+        (r1 as u32, r2 as u32, r3 as u32)
     }
 }
 
@@ -336,14 +360,14 @@ pub unsafe trait FailureData: sealed::Sealed {
     const RETURN_VARIANT: ReturnVariant;
 
     /// Constructs the error data given the raw register values.
-    fn from_raw_values(r1: ErrorCode, r2: u32, r3: u32) -> Self;
+    fn from_raw_values(r1: ErrorCode, r2: usize, r3: usize) -> Self;
 }
 
 impl sealed::Sealed for ErrorCode {}
 unsafe impl FailureData for ErrorCode {
     const RETURN_VARIANT: ReturnVariant = return_variant::FAILURE;
 
-    fn from_raw_values(r1: ErrorCode, _r2: u32, _r3: u32) -> Self {
+    fn from_raw_values(r1: ErrorCode, _r2: usize, _r3: usize) -> Self {
         r1
     }
 }
@@ -351,23 +375,23 @@ impl sealed::Sealed for (ErrorCode, u32) {}
 unsafe impl FailureData for (ErrorCode, u32) {
     const RETURN_VARIANT: ReturnVariant = return_variant::FAILURE_U32;
 
-    fn from_raw_values(r1: ErrorCode, r2: u32, _r3: u32) -> Self {
-        (r1, r2)
+    fn from_raw_values(r1: ErrorCode, r2: usize, _r3: usize) -> Self {
+        (r1, r2 as u32)
     }
 }
 impl sealed::Sealed for (ErrorCode, u32, u32) {}
 unsafe impl FailureData for (ErrorCode, u32, u32) {
     const RETURN_VARIANT: ReturnVariant = return_variant::FAILURE_2_U32;
 
-    fn from_raw_values(r1: ErrorCode, r2: u32, r3: u32) -> Self {
-        (r1, r2, r3)
+    fn from_raw_values(r1: ErrorCode, r2: usize, r3: usize) -> Self {
+        (r1, r2 as u32, r3 as u32)
     }
 }
 impl sealed::Sealed for (ErrorCode, u64) {}
 unsafe impl FailureData for (ErrorCode, u64) {
     const RETURN_VARIANT: ReturnVariant = return_variant::FAILURE_U64;
 
-    fn from_raw_values(r1: ErrorCode, r2: u32, r3: u32) -> Self {
-        (r1, r2 as u64 | ((r3 as u64) << 32))
+    fn from_raw_values(r1: ErrorCode, r2: usize, r3: usize) -> Self {
+        (r1, get_u64_from_usizes(r2, r3))
     }
 }

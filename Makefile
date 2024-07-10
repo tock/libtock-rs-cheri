@@ -304,6 +304,36 @@ flash-clue_nrf52840:
 	LIBTOCK_PLATFORM=clue_nrf52840 cargo run --example $(EXAMPLE) $(features) \
 		--target=thumbv7em-none-eabi $(release) -- --deploy=tockloader
 
+THIS_FILE := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+CHERI_SDK ?= $(abspath ${HOME}/cheri/output/sdk)
+CHERI_LIBC ?= $(CHERI_SDK)/baremetal/baremetal-newlib-riscv$(BITS)-hybrid/riscv$(BITS)-unknown-elf
+
+
+# We need to expand the linker path here
+# For whatever reason, the cfg target.'cfg(any(target_arch = \"riscv32\", target_arch = \"riscv64\"))' fails here,
+# So I wrote out all the expected targets.
+CHERI_CARGO_FLAGS := -Z build-std=core,compiler_builtins,alloc \
+	--config "target.riscv32imac-unknown-none-elf.linker='${CHERI_SDK}/bin/lld'" \
+	--config "target.riscv64imac-unknown-none-elf.linker='${CHERI_SDK}/bin/lld'" \
+	--config "target.riscv32imac-unknown-none-cheri-hybrid-elf.linker='${CHERI_SDK}/bin/lld'" \
+	--config "target.riscv64imac-unknown-none-cheri-hybrid-elf.linker='${CHERI_SDK}/bin/lld'" \
+
+CHERI_CARGO_PARAMS := LIBTOCK_PLATFORM=riscv CHERI_SDK=${CHERI_SDK} CHERI_LIBC=${CHERI_LIBC}
+
+.PHONY: qemu_rv64
+qemu_rv64:
+	 ${CHERI_CARGO_PARAMS} ABI=riscv64 cargo run --example $(EXAMPLE) $(features) $(CHERI_CARGO_FLAGS) \
+		--target=riscv64imac-unknown-none-elf $(release)
+
+.PHONY: qemu_rv64xcheri
+qemu_rv64xcheri:
+	${CHERI_CARGO_PARAMS} ABI=riscv64-hybrid cargo run --example $(EXAMPLE) $(features) $(CHERI_CARGO_FLAGS) \
+		--target=riscv64imac-unknown-none-cheri-hybrid-elf $(release)
+
+.PHONY: run_qemu_rv64xcheri
+run_qemu_rv64xcheri: qemu_rv64xcheri
+	APP_BIN=$(abspath target/riscv64imac-unknown-none-cheri-hybrid-elf/release/examples/$(EXAMPLE).tbf) make -C tock/boards/qemu_cheri_virt run_app
+
 .PHONY: clean
 clean:
 	cargo clean

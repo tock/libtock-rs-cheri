@@ -3,6 +3,23 @@
 
 extern crate libtock_debug_panic;
 
+pub extern crate alloc;
+
+pub mod prelude {
+    // Normally these would be part of the prelude if using std. Re-exporting them here for better
+    // compatibility. Programs still need to import libtock::prelude::*
+    pub type Box<T> = alloc::boxed::Box<T>;
+    pub type Vec<T> = alloc::vec::Vec<T>;
+    pub type String = alloc::string::String;
+    pub use libtock_runtime::print;
+    pub use libtock_runtime::println;
+
+    // Not a part of the std predule, but used by so many tock applications that we should also have
+    // them in scope by default
+    pub use libtock_runtime::set_main;
+    pub use libtock_runtime::stack_size;
+}
+
 pub use libtock_platform as platform;
 pub use libtock_runtime as runtime;
 

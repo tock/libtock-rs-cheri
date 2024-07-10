@@ -5,7 +5,7 @@ fn failure() {
     let command_return = unsafe {
         CommandReturn::new(
             return_variant::FAILURE,
-            ErrorCode::Reserve as u32,
+            ErrorCode::Reserve as usize,
             1002,
             1003,
         )
@@ -112,7 +112,7 @@ fn failure_2_u32() {
     let command_return = unsafe {
         CommandReturn::new(
             return_variant::FAILURE_2_U32,
-            ErrorCode::Already as u32,
+            ErrorCode::Already as usize,
             1002,
             1003,
         )
@@ -170,7 +170,7 @@ fn failure_u64() {
     let command_return = unsafe {
         CommandReturn::new(
             return_variant::FAILURE_U64,
-            ErrorCode::Busy as u32,
+            ErrorCode::Busy as usize,
             0x1002,
             0x1003,
         )

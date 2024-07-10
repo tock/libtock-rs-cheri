@@ -81,7 +81,7 @@ impl<S: Syscalls, C: platform::subscribe::Config> Alarm<S, C> {
         share::scope(|subscribe| {
             S::subscribe::<_, _, C, DRIVER_NUM, { subscribe::CALLBACK }>(subscribe, &called)?;
 
-            S::command(DRIVER_NUM, command::SET_RELATIVE, ticks.0, 0)
+            S::command(DRIVER_NUM, command::SET_RELATIVE, ticks.0 as usize, 0)
                 .to_result()
                 .map(|_when: u32| ())?;
 

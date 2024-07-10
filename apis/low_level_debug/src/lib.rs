@@ -32,7 +32,7 @@ impl<S: Syscalls> LowLevelDebug<S> {
     /// Print one of the predefined alerts in [`AlertCode`].
     #[inline(always)]
     pub fn print_alert_code(code: AlertCode) {
-        let _ = S::command(DRIVER_NUM, PRINT_ALERT_CODE, code as u32, 0);
+        let _ = S::command(DRIVER_NUM, PRINT_ALERT_CODE, code as usize, 0);
     }
 
     /// Print a single number. The number will be printed in hexadecimal.
@@ -41,7 +41,7 @@ impl<S: Syscalls> LowLevelDebug<S> {
     /// should not be called by released library code.
     #[inline(always)]
     pub fn print_1(x: u32) {
-        let _ = S::command(DRIVER_NUM, PRINT_1, x, 0);
+        let _ = S::command(DRIVER_NUM, PRINT_1, x as usize, 0);
     }
 
     /// Print two numbers. The numbers will be printed in hexadecimal.
@@ -52,7 +52,7 @@ impl<S: Syscalls> LowLevelDebug<S> {
     /// value is being printed.
     #[inline(always)]
     pub fn print_2(x: u32, y: u32) {
-        let _ = S::command(DRIVER_NUM, PRINT_2, x, y);
+        let _ = S::command(DRIVER_NUM, PRINT_2, x as usize, y as usize);
     }
 }
 
@@ -64,6 +64,9 @@ pub enum AlertCode {
     /// A statically-linked app was not installed in the correct location in
     /// flash.
     WrongLocation = 0x02,
+
+    /// Heap OOM
+    HeapOOM = 0x03,
 }
 
 #[cfg(test)]

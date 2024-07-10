@@ -77,7 +77,7 @@ impl crate::fake::SyscallDriver for Console {
         }
     }
 
-    fn command(&self, command_num: u32, argument0: u32, _argument1: u32) -> CommandReturn {
+    fn command(&self, command_num: u32, argument0: usize, _argument1: usize) -> CommandReturn {
         match command_num {
             DRIVER_CHECK => {}
             WRITE => {

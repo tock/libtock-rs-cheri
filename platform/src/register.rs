@@ -1,3 +1,6 @@
+use kernel::cheri::cptr;
+use kernel::cheri::CPtrOps;
+
 /// In order to work with Miri's `-Zmiri-track-raw-pointers` flag, we cannot
 /// pass pointers to the kernel through `usize` values (as casting to and from
 /// `usize` drops the pointer`s tag). Instead, `RawSyscalls` uses the `Register`
@@ -8,7 +11,7 @@
 // soundly passed as a Register.
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
-pub struct Register(pub *mut ());
+pub struct Register(pub cptr);
 
 // -----------------------------------------------------------------------------
 // Conversions to Register
@@ -16,31 +19,35 @@ pub struct Register(pub *mut ());
 
 impl From<crate::ErrorCode> for Register {
     fn from(value: crate::ErrorCode) -> Register {
-        Register(value as u16 as *mut ())
+        (value as usize).into()
     }
 }
 
 impl From<u32> for Register {
     fn from(value: u32) -> Register {
-        Register(value as *mut ())
+        (value as usize).into()
     }
 }
 
 impl From<usize> for Register {
     fn from(value: usize) -> Register {
-        Register(value as *mut ())
+        Register(value.into())
     }
 }
 
 impl<T> From<*mut T> for Register {
     fn from(value: *mut T) -> Register {
-        Register(value as *mut ())
+        (value as *const T).into()
     }
 }
 
 impl<T> From<*const T> for Register {
     fn from(value: *const T) -> Register {
-        Register(value as *mut ())
+        let mut v: cptr = Default::default();
+        // We don't use core::mem::size_of::<T>() as a length here because users of this interface
+        // lie about the type of T too much.
+        v.set_addr_from_ddc(value as usize);
+        Register(v)
     }
 }
 
@@ -59,25 +66,36 @@ impl Register {
     /// u32::MAX. This conversion should be avoided in host-based test code; use
     /// the `TryFrom<Register> for u32` implementation instead.
     pub fn as_u32(self) -> u32 {
-        self.0 as u32
+        let as_usize: usize = self.0.into();
+        as_usize as u32
+    }
+
+    /// Similar to From<*const ()> but on CHERI will derive from PCC
+    pub fn from_function(fnptr: *const ()) -> Register {
+        let mut v: cptr = Default::default();
+        v.set_addr_from_pcc(fnptr as usize);
+        Register(v)
     }
 }
 
 impl From<Register> for usize {
     fn from(register: Register) -> usize {
-        register.0 as usize
+        register.0.into()
     }
 }
 
 impl<T> From<Register> for *mut T {
     fn from(register: Register) -> *mut T {
-        register.0 as *mut T
+        <Register as Into<*const T>>::into(register) as *mut T
     }
 }
 
 impl<T> From<Register> for *const T {
     fn from(register: Register) -> *const T {
-        register.0 as *const T
+        // Again, we can't check the CHERI length here because the user can cast to an arbitrary
+        // *const T to a *const V, which may have different size.
+        let as_usize: usize = register.into();
+        as_usize as *const T
     }
 }
 
@@ -92,6 +110,7 @@ impl TryFrom<Register> for u32 {
     type Error = core::num::TryFromIntError;
 
     fn try_from(register: Register) -> Result<u32, core::num::TryFromIntError> {
-        (register.0 as usize).try_into()
+        let as_usize: usize = register.into();
+        (as_usize).try_into()
     }
 }

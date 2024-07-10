@@ -31,11 +31,11 @@ impl<const LEDS_COUNT: usize> crate::fake::SyscallDriver for Leds<LEDS_COUNT> {
         DriverInfo::new(DRIVER_NUM)
     }
 
-    fn command(&self, command_num: u32, argument0: u32, _argument1: u32) -> CommandReturn {
+    fn command(&self, command_num: u32, argument0: usize, _argument1: usize) -> CommandReturn {
         match command_num {
             DRIVER_CHECK => crate::command_return::success_u32(LEDS_COUNT as u32),
             LED_ON => {
-                if argument0 < LEDS_COUNT as u32 {
+                if argument0 < LEDS_COUNT {
                     self.leds[argument0 as usize].set(true);
                     crate::command_return::success()
                 } else {
@@ -43,7 +43,7 @@ impl<const LEDS_COUNT: usize> crate::fake::SyscallDriver for Leds<LEDS_COUNT> {
                 }
             }
             LED_OFF => {
-                if argument0 < LEDS_COUNT as u32 {
+                if argument0 < LEDS_COUNT {
                     self.leds[argument0 as usize].set(false);
                     crate::command_return::success()
                 } else {
@@ -51,7 +51,7 @@ impl<const LEDS_COUNT: usize> crate::fake::SyscallDriver for Leds<LEDS_COUNT> {
                 }
             }
             LED_TOGGLE => {
-                if argument0 < LEDS_COUNT as u32 {
+                if argument0 < LEDS_COUNT {
                     self.leds[argument0 as usize].set(!self.leds[argument0 as usize].get());
                     crate::command_return::success()
                 } else {

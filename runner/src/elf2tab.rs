@@ -23,6 +23,7 @@ fn get_platform_architecture(platform: &str) -> Option<&'static str> {
         "imxrt1050" | "teensy40" => Some("cortex-m7"),
         "opentitan" | "esp32_c3_devkitm_1" => Some("riscv32imc"),
         "hifive1" => Some("riscv32imac"),
+        "riscv" => Some("riscv"),
         _ => None,
     }
 }
@@ -33,7 +34,8 @@ pub fn convert_elf(cli: &Cli, platform: &str) -> OutFiles {
     let package_name = cli.elf.file_stem().expect("ELF must be a file");
     let mut tab_path = cli.elf.clone();
     tab_path.set_extension("tab");
-    let protected_size = TBF_HEADER_SIZE.to_string();
+    // Keeping the protected size aligned helps relocating programs without the header
+    let protected_size = (TBF_HEADER_SIZE + (0u32.wrapping_sub(TBF_HEADER_SIZE) % 16)).to_string();
     if cli.verbose {
         println!("Package name: {:?}", package_name);
         println!("TAB path: {}", tab_path.display());
